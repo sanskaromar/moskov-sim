@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Spear Launch Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Import OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(17, 24, 39, 0.8); /* bg-gray-900 with opacity */
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(55, 65, 81, 0.5); /* border-gray-700 with opacity */
+            max-width: 320px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .control-btn {
+            background-color: #3B82F6; /* bg-blue-600 */
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 500;
+        }
+        .control-btn:hover {
+            background-color: #2563EB; /* bg-blue-700 */
+        }
+        .control-btn:disabled {
+            background-color: #4B5563; /* bg-gray-600 */
+            cursor: not-allowed;
+        }
+        .info-panel {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #4B5563; /* border-gray-600 */
+        }
+        .info-label {
+            font-weight: 700;
+            color: #9CA3AF; /* text-gray-400 */
+        }
+        .info-value {
+            font-weight: 500;
+            color: #F9FAFB; /* text-gray-50 */
+            font-family: monospace;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+        }
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4B5563;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2563EB;
+        }
+        input:checked + .slider:before {
+            transform: translateX(16px);
+        }
+        .controls-info {
+            font-size: 0.75rem;
+            color: #9CA3AF;
+            background-color: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h1 class="text-xl font-bold mb-4">Spear Launch Controls</h1>
+        
+        <div class="flex space-x-2 mb-4">
+            <button id="start-btn" class="control-btn w-full">Start</button>
+            <button id="reset-btn" class="control-btn w-full bg-red-600 hover:bg-red-700">Reset</button>
+        </div>
+
+        <div class="mb-4">
+            <label for="speed" class="block mb-2 text-sm font-medium text-gray-300">Sim Speed (days/sec): <span id="speed-value" class="font-bold">1.0</span>x</label>
+            <input id="speed" type="range" min="0.1" max="10" value="1" step="0.1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <div class="mb-4">
+            <label for="visual-speed" class="block mb-2 text-sm font-medium text-gray-300">Spear Visual Speed: <span id="visual-speed-value" class="font-bold">1.0</span>x</label>
+            <input id="visual-speed" type="range" min="0.1" max="10" value="1" step="0.1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <div class="mb-4">
+            <label for="move-speed" class="block mb-2 text-sm font-medium text-gray-300">Your Move Speed (km/h): <span id="move-speed-value" class="font-bold">50</span></label>
+            <input id="move-speed" type="range" min="0" max="100" value="50" step="1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <div class="mb-4">
+            <label for="cooldown" class="block mb-2 text-sm font-medium text-gray-300">Cooldown (seconds): <span id="cooldown-value" class="font-bold">60</span>s</label>
+            <input id="cooldown" type="range" min="1" max="300" value="60" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+        </div>
+        
+        <div class="flex items-center justify-between mb-4">
+            <label for="auto-throw-toggle" class="text-sm font-medium text-gray-300">Auto-Throw</label>
+            <label class="switch">
+                <input type="checkbox" id="auto-throw-toggle">
+                <span class="slider"></span>
+            </label>
+        </div>
+
+        <button id="throw-spear-btn" class="control-btn w-full" disabled>Throw Spear Manually</button>
+        
+        <div id="info-panel" class="info-panel">
+            <h2 class="text-lg font-bold mb-2">Simulation Data</h2>
+            <div class="space-y-2">
+                <div>
+                    <span class="info-label">Spears Thrown:</span>
+                    <span id="spears-thrown" class="info-value float-right">0</span>
+                </div>
+                <div>
+                    <span class="info-label">Time Elapsed:</span>
+                    <span id="time-elapsed" class="info-value float-right">0.0 days</span>
+                </div>
+                <div>
+                    <span class="info-label">Distance:</span>
+                    <span id="distance" class="info-value float-right">N/A</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-info">
+            <b>Mouse:</b> Orbit (LMB), Pan (RMB), Zoom (Scroll)<br>
+            <b>Keyboard:</b> Move (WASD), Up/Down (Space/Shift)
+        </div>
+    </div>
+
+    <script type="module">
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1e12);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- CAMERA CONTROLS ---
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- CONSTANTS & PARAMETERS ---
+        const C = 299792458; // Speed of light (m/s)
+        const EARTH_RADIUS = 6.378e6; // meters
+        const EARTH_ROTATION_SPEED = 464; // m/s at equator
+        const EARTH_ORBIT_RADIUS = 1.496e11; // meters (1 AU)
+        const EARTH_ORBIT_SPEED = 29780; // m/s
+        const SUN_RADIUS = 6.96e8; // meters
+
+        const SCALE = 1e-5;
+        const BASE_SPEAR_SPEED_VISUAL = C * SCALE * 0.001; 
+
+        let simulationTime = 0;
+        let timeScale = 3600 * 24; 
+        let isRunning = false;
+        let isAutoThrowing = false;
+        let spearCooldown = 60; 
+        let timeSinceLastThrow = 0;
+        let userTravelSpeed = 50 * 1000 / 3600; 
+        let observerAngle = 0; 
+        let visualSpeedMultiplier = 1.0;
+        let spears = [];
+        let lastCalculatedDistance = "N/A";
+
+        // --- OBJECT CREATION ---
+        const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN_RADIUS * SCALE, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+        scene.add(sun);
+        sun.add(new THREE.PointLight(0xffffff, 2, 0, 2));
+        sun.add(new THREE.AxesHelper(SUN_RADIUS * SCALE * 10));
+
+        const earth = new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS * SCALE, 32, 32), new THREE.MeshPhongMaterial({ color: 0x4da6ff, shininess: 5 }));
+        scene.add(earth);
+        earth.add(new THREE.AxesHelper(SUN_RADIUS * SCALE * 10)); // Bigger Axes
+
+        const observer = new THREE.Mesh(new THREE.SphereGeometry(EARTH_RADIUS * SCALE * 0.1, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        earth.add(observer);
+        observer.position.set(EARTH_RADIUS * SCALE, 0, 0);
+
+        const orbitPath = new THREE.Line(new THREE.BufferGeometry().setFromPoints(new THREE.EllipseCurve(0, 0, EARTH_ORBIT_RADIUS * SCALE, EARTH_ORBIT_RADIUS * SCALE, 0, 2 * Math.PI, false, 0).getPoints(100)), new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.3 }));
+        orbitPath.rotation.x = Math.PI / 2;
+        scene.add(orbitPath);
+
+        camera.position.z = EARTH_ORBIT_RADIUS * SCALE * 0.2;
+        camera.position.y = EARTH_ORBIT_RADIUS * SCALE * 0.1;
+        controls.update();
+
+        // --- KEYBOARD CONTROLS SETUP ---
+        const keyState = {};
+        const keyMoveSpeed = EARTH_ORBIT_RADIUS * SCALE * 0.5; // Speed of keyboard movement
+
+        window.addEventListener('keydown', (e) => { keyState[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { keyState[e.key.toLowerCase()] = false; });
+
+        function handleKeyboardMovement(deltaTime) {
+            if (Object.values(keyState).every(v => v === false)) return;
+
+            const moveSpeed = keyMoveSpeed * deltaTime;
+            
+            const worldX = new THREE.Vector3(1, 0, 0);
+            const worldY = new THREE.Vector3(0, 1, 0);
+            const worldZ = new THREE.Vector3(0, 0, 1);
+
+            if (keyState['w']) { camera.position.addScaledVector(worldZ, -moveSpeed); controls.target.addScaledVector(worldZ, -moveSpeed); }
+            if (keyState['s']) { camera.position.addScaledVector(worldZ, moveSpeed); controls.target.addScaledVector(worldZ, moveSpeed); }
+            if (keyState['a']) { camera.position.addScaledVector(worldX, -moveSpeed); controls.target.addScaledVector(worldX, -moveSpeed); }
+            if (keyState['d']) { camera.position.addScaledVector(worldX, moveSpeed); controls.target.addScaledVector(worldX, moveSpeed); }
+            if (keyState[' ']) { camera.position.addScaledVector(worldY, moveSpeed); controls.target.addScaledVector(worldY, moveSpeed); }
+            if (keyState['shift']) { camera.position.addScaledVector(worldY, -moveSpeed); controls.target.addScaledVector(worldY, -moveSpeed); }
+        }
+
+        // --- UI BINDINGS ---
+        const startBtn = document.getElementById('start-btn'), resetBtn = document.getElementById('reset-btn'), throwSpearBtn = document.getElementById('throw-spear-btn');
+        const cooldownSlider = document.getElementById('cooldown'), cooldownValueSpan = document.getElementById('cooldown-value');
+        const autoThrowToggle = document.getElementById('auto-throw-toggle');
+        const speedSlider = document.getElementById('speed'), speedValueSpan = document.getElementById('speed-value');
+        const moveSpeedSlider = document.getElementById('move-speed'), moveSpeedValueSpan = document.getElementById('move-speed-value');
+        const visualSpeedSlider = document.getElementById('visual-speed'), visualSpeedValueSpan = document.getElementById('visual-speed-value');
+        const spearsThrownSpan = document.getElementById('spears-thrown'), timeElapsedSpan = document.getElementById('time-elapsed'), distanceSpan = document.getElementById('distance');
+
+        startBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            startBtn.textContent = isRunning ? 'Pause' : 'Resume';
+            throwSpearBtn.disabled = isAutoThrowing || !isRunning;
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isRunning = false;
+            simulationTime = 0;
+            timeSinceLastThrow = 0;
+            observerAngle = 0;
+            spears.forEach(s => scene.remove(s.mesh));
+            spears = [];
+            startBtn.textContent = 'Start';
+            throwSpearBtn.disabled = true;
+            updateUI();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            const speedMultiplier = parseFloat(e.target.value);
+            timeScale = 3600 * 24 * speedMultiplier;
+            speedValueSpan.textContent = `${speedMultiplier.toFixed(1)}x`;
+        });
+
+        visualSpeedSlider.addEventListener('input', (e) => {
+            visualSpeedMultiplier = parseFloat(e.target.value);
+            visualSpeedValueSpan.textContent = `${visualSpeedMultiplier.toFixed(1)}x`;
+        });
+
+        moveSpeedSlider.addEventListener('input', (e) => {
+            const speedKmh = parseInt(e.target.value);
+            userTravelSpeed = speedKmh * 1000 / 3600;
+            moveSpeedValueSpan.textContent = speedKmh;
+        });
+
+        cooldownSlider.addEventListener('input', (e) => {
+            spearCooldown = parseInt(e.target.value);
+            cooldownValueSpan.textContent = spearCooldown;
+        });
+        
+        autoThrowToggle.addEventListener('change', (e) => {
+            isAutoThrowing = e.target.checked;
+            throwSpearBtn.disabled = isAutoThrowing || !isRunning;
+        });
+
+        throwSpearBtn.addEventListener('click', () => {
+            if (timeSinceLastThrow >= spearCooldown) {
+                throwSpear();
+                timeSinceLastThrow = 0;
+            } else {
+                console.warn(`Cooldown not met! Please wait.`);
+            }
+        });
+
+        // --- CORE LOGIC ---
+        function throwSpear() {
+            const launchPosition = new THREE.Vector3();
+            observer.getWorldPosition(launchPosition);
+            const launchDirection = launchPosition.clone().sub(earth.position).normalize();
+            const spearGeometry = new THREE.CylinderGeometry(1000, 1000, 50000, 8);
+            const spearMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const spearMesh = new THREE.Mesh(spearGeometry, spearMaterial);
+            spearMesh.position.copy(launchPosition);
+            spearMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), launchDirection);
+            scene.add(spearMesh);
+            spears.push({
+                mesh: spearMesh,
+                realPosition: launchPosition.clone().divideScalar(SCALE),
+                realDirection: launchDirection.clone(),
+                launchTime: simulationTime
+            });
+        }
+
+        function updatePositions(deltaTime) {
+            const simDeltaTime = deltaTime * timeScale;
+            simulationTime += simDeltaTime;
+            timeSinceLastThrow += simDeltaTime;
+
+            const userAngularSpeed = userTravelSpeed / EARTH_RADIUS;
+            observerAngle += userAngularSpeed * simDeltaTime;
+            observer.position.set(
+                Math.cos(observerAngle) * EARTH_RADIUS * SCALE,
+                0,
+                Math.sin(observerAngle) * EARTH_RADIUS * SCALE
+            );
+
+            const rotationAngle = (EARTH_ROTATION_SPEED / EARTH_RADIUS) * simDeltaTime;
+            earth.rotation.y += rotationAngle;
+
+            const orbitAngle = (EARTH_ORBIT_SPEED / EARTH_ORBIT_RADIUS) * simDeltaTime;
+            const currentOrbitAngle = (earth.rotation.z || 0) + orbitAngle;
+            const newX = Math.cos(currentOrbitAngle) * EARTH_ORBIT_RADIUS * SCALE;
+            const newZ = Math.sin(currentOrbitAngle) * EARTH_ORBIT_RADIUS * SCALE;
+            earth.position.set(newX, 0, newZ);
+            earth.rotation.z = currentOrbitAngle;
+
+            spears.forEach(spear => {
+                const distanceTraveledVisual = (BASE_SPEAR_SPEED_VISUAL * visualSpeedMultiplier) * simDeltaTime;
+                spear.mesh.position.addScaledVector(spear.realDirection, distanceTraveledVisual);
+                spear.realPosition.addScaledVector(spear.realDirection, C * simDeltaTime);
+            });
+        }
+
+        function updateDistanceCalculation() {
+            if (spears.length < 2) {
+                lastCalculatedDistance = "N/A";
+                return;
+            }
+            const lastSpear = spears[spears.length - 1];
+            const secondLastSpear = spears[spears.length - 2];
+            const distance = lastSpear.realPosition.distanceTo(secondLastSpear.realPosition);
+            
+            if (distance > 1.496e11) {
+                 lastCalculatedDistance = `${(distance / 1.496e11).toFixed(2)} AU`;
+            } else if (distance > 1e9) {
+                lastCalculatedDistance = `${(distance / 1e9).toFixed(2)} M km`;
+            } else if (distance > 1e6) {
+                lastCalculatedDistance = `${(distance / 1e6).toFixed(2)} k km`;
+            } else {
+                lastCalculatedDistance = `${distance.toFixed(0)} m`;
+            }
+        }
+
+        function updateUI() {
+            spearsThrownSpan.textContent = spears.length;
+            timeElapsedSpan.textContent = `${(simulationTime / 86400).toFixed(1)} days`;
+            distanceSpan.textContent = lastCalculatedDistance;
+        }
+
+        // --- ANIMATION LOOP ---
+        let lastTime = 0;
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+            const deltaTime = (currentTime - lastTime) * 0.001 || 0;
+            lastTime = currentTime;
+
+            if (isRunning && deltaTime > 0) {
+                updatePositions(deltaTime);
+                if (isAutoThrowing && timeSinceLastThrow >= spearCooldown) {
+                    throwSpear();
+                    timeSinceLastThrow = 0;
+                }
+                updateDistanceCalculation();
+                updateUI();
+            }
+            
+            handleKeyboardMovement(deltaTime);
+            controls.update(); // Required for damping and keyboard controls to work well together
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate(0);
+    </script>
+</body>
+</html>
